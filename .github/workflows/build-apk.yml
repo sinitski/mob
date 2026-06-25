@@ -71,12 +71,9 @@ jobs:
       run: |
         buildozer android debug
       env:
-        ANDROID_HOME: /opt/android
-        ANDROID_SDK_ROOT: /opt/android
-    
-    - name: Find APK
-      run: |
-        find . -name "*.apk" -type f
+        ANDROID_HOME: /usr/local/lib/android/sdk
+        ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/27.3.13750724
     
     - name: List artifact folders
       run: |
