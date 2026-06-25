@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.webhooksender">
+
+    <!-- Internet permission for webhook requests -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- Optional: For lock screen widget support -->
+    <uses-permission android:name="android.permission.BIND_APPWIDGET" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@drawable/icon"
+        android:requestLegacyExternalStorage="true">
+
+        <!-- Main activity -->
+        <activity
+            android:name=".MainActivity"
+            android:label="@string/app_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- App widget provider (for lock screen widget) -->
+        <receiver
+            android:name=".WebhookWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/webhook_widget_info" />
+        </receiver>
+
+    </application>
+
+</manifest>

@@ -1,0 +1,114 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flet-core
+        pip install buildozer
+        pip install cython
+    
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+    
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v2
+      with:
+        api-levels: '31'
+        build-tools: '31.0.0'
+    
+    - name: Create buildozer.spec
+      run: |
+        cat > buildozer.spec << 'EOF'
+        [app]
+        title = Webhook Sender
+        package.name = webhooksender
+        package.domain = org.webhooksender
+        source.dir = .
+        source.include_exts = py,png,jpg,kv,atlas
+        version = 1.0.0
+        requirements = python3,kivy,httpx
+        orientation = portrait
+        fullscreen = 0
+        android.permissions = INTERNET
+        android.api = 31
+        android.minapi = 21
+        android.ndk = 25b
+        android.accept_sdk_license = True
+        android.logcat_filters = *:S python:D
+        
+        [buildozer]
+        log_level = 2
+        warn_on_root = 1
+        EOF
+    
+    - name: Build with Flet
+      run: |
+        pip install flet
+        flet publish
+      env:
+        FLET_BUILD_TYPE: android
+        FLET_ANDROID_ACCEPTED_SDK_LICENSE: true
+      continue-on-error: true
+    
+    - name: Build APK with buildozer
+      run: |
+        pip install buildozer
+        buildozer android debug
+      env:
+        ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+        ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK }}
+      continue-on-error: true
+    
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: app-debug.apk
+        path: bin/
+        retention-days: 30
+    
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        body: APK build for ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./bin/app-debug.apk
+        asset_name: webhooksender-debug.apk
+        asset_content_type: application/vnd.android.package-archive
