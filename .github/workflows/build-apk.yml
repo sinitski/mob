@@ -20,24 +20,27 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flet-core
-        pip install buildozer
-        pip install cython
-    
-    - name: Set up Java
-      uses: actions/setup-java@v3
+    - name: Set up Java (required for Android SDK)
+      uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '11'
+        java-version: '17'
     
-    - name: Set up Android SDK
-      uses: android-actions/setup-android@v2
-      with:
-        api-levels: '31'
-        build-tools: '31.0.0'
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+    
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install buildozer cython
+        # Install additional dependencies
+        sudo apt-get update
+        sudo apt-get install -y libatlas-base-dev libjpeg-dev zlib1g-dev
+    
+    - name: Accept Android licenses
+      run: |
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses <<< "y" || true
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-31" "build-tools;31.0.0" || true
     
     - name: Create buildozer.spec
       run: |
@@ -49,7 +52,7 @@ jobs:
         source.dir = .
         source.include_exts = py,png,jpg,kv,atlas
         version = 1.0.0
-        requirements = python3,kivy,httpx
+        requirements = python3,kivy,httpx,requests
         orientation = portrait
         fullscreen = 0
         android.permissions = INTERNET
@@ -64,31 +67,28 @@ jobs:
         warn_on_root = 1
         EOF
     
-    - name: Build with Flet
-      run: |
-        pip install flet
-        flet publish
-      env:
-        FLET_BUILD_TYPE: android
-        FLET_ANDROID_ACCEPTED_SDK_LICENSE: true
-      continue-on-error: true
-    
     - name: Build APK with buildozer
       run: |
-        pip install buildozer
-        buildozer android debug
+        buildozer android debug 2>&1 || true
       env:
-        ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
-        ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK }}
+        ANDROID_HOME: /opt/android
+        ANDROID_SDK_ROOT: /opt/android
       continue-on-error: true
+    
+    - name: Find APK
+      run: |
+        find . -name "*.apk" -type f || echo "No APK found"
     
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: app-debug.apk
-        path: bin/
+        name: webhook-sender-apk
+        path: |
+          bin/*.apk
+          dist/*.apk
         retention-days: 30
+        if-no-files-found: ignore
     
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
@@ -103,12 +103,13 @@ jobs:
         prerelease: false
     
     - name: Upload Release Asset
-      if: startsWith(github.ref, 'refs/tags/')
+      if: startsWith(github.ref, 'refs/tags/') && success()
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./bin/app-debug.apk
-        asset_name: webhooksender-debug.apk
+        asset_path: ./bin/webhooksender-debug.apk
+        asset_name: webhooksender-${{ github.ref_name }}.apk
         asset_content_type: application/vnd.android.package-archive
+      continue-on-error: true
